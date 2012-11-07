@@ -2,19 +2,34 @@
 
 namespace Knp\Snappy;
 
+use Symfony\Component\Filesystem\Filesystem;
+use Symfony\Component\Process\Process;
+
 /**
  * Base generator class for medias
- *
- * @package Snappy
  *
  * @author  Matthieu Bontemps <matthieu.bontemps@knplabs.com>
  * @author  Antoine Hérault <antoine.herault@knplabs.com>
  */
 abstract class AbstractGenerator implements GeneratorInterface
 {
+    /**
+     * @var \Symfony\Component\Filesystem\Filesystem
+     */
+    protected $filesystem;
+    /**
+     * @var string
+     */
+    protected $defaultExtension;
+    /**
+     * @var array
+     */
+    protected $options = array();
+
+    /**
+     * @var string
+     */
     private $binary;
-    private $options = array();
-    private $defaultExtension;
 
     /**
      * Constructor
@@ -22,18 +37,20 @@ abstract class AbstractGenerator implements GeneratorInterface
      * @param  string $binary
      * @param  array  $options
      */
-    public function __construct($binary, array $options = array())
+    public function __construct($binary, array $options = array(), $filesystem = null)
     {
+        $this->filesystem = new Filesystem();
+
         $this->configure();
 
-        $this->setBinary($binary);
+        $this->binary = $binary ?: '/usr/local/bin/wkhtmltopdf';
         $this->setOptions($options);
     }
 
     /**
      * This method must configure the media options
      *
-     * @see AbstractGenerator::addOption()
+     * @see AbstractGenerator::setOptions()
      */
     abstract protected function configure();
 
@@ -49,21 +66,13 @@ abstract class AbstractGenerator implements GeneratorInterface
     }
 
     /**
-     * Gets the default extension
-     *
-     * @return $string
-     */
-    public function getDefaultExtension()
-    {
-        return $this->defaultExtension;
-    }
-
-    /**
      * Sets an option. Be aware that option values are NOT validated and that
      * it is your responsibility to validate user inputs
      *
      * @param  string $name  The option to set
      * @param  mixed  $value The value (NULL to unset)
+     *
+     * @throws \InvalidArgumentException
      */
     public function setOption($name, $value)
     {
@@ -111,10 +120,9 @@ abstract class AbstractGenerator implements GeneratorInterface
 
         $command = $this->getCommand($input, $output, $options);
 
-        list($status, $stdout, $stderr) = $this->executeCommand($command);
-        $this->checkProcessStatus($status, $stdout, $stderr, $command);
+        $this->executeCommand($command);
 
-        $this->checkOutput($output, $command);
+        return $this->checkOutput($output, $command);
     }
 
     /**
@@ -124,9 +132,9 @@ abstract class AbstractGenerator implements GeneratorInterface
     {
         $filename = $this->createTemporaryFile($html, 'html');
 
-        $result = $this->generate($filename, $output, $options, $overwrite);
+        $this->generate($filename, $output, $options, $overwrite);
 
-        $this->unlink($filename);
+        $this->filesystem->unlink($filename);
     }
 
     /**
@@ -134,13 +142,11 @@ abstract class AbstractGenerator implements GeneratorInterface
      */
     public function getOutput($input, array $options = array())
     {
-        $filename = $this->createTemporaryFile(null, $this->getDefaultExtension());
+        $filename = $this->createTemporaryFile(null, $this->defaultExtension);
 
-        $this->generate($input, $filename, $options);
+        $result = $this->generate($input, $filename, $options);
 
-        $result = $this->getFileContents($filename);
-
-        $this->unlink($filename);
+        $this->filesystem->unlink($filename);
 
         return $result;
     }
@@ -152,11 +158,7 @@ abstract class AbstractGenerator implements GeneratorInterface
     {
         $filename = $this->createTemporaryFile($html, 'html');
 
-        $result = $this->getOutput($filename, $options);
-
-        $this->unlink($filename);
-
-        return $result;
+        return $this->getOutput($filename, $options, 'html');
     }
 
     /**
@@ -183,7 +185,7 @@ abstract class AbstractGenerator implements GeneratorInterface
      * Returns the command for the given input and output files
      *
      * @param  string $input   The input file
-     * @param  string $output  The ouput file
+     * @param  string $output  The output file
      * @param  array  $options An optional array of options that will be used
      *                         only for this command
      *
@@ -197,39 +199,14 @@ abstract class AbstractGenerator implements GeneratorInterface
     }
 
     /**
-     * Adds an option
-     *
-     * @param  string $name    The name
-     * @param  mixed  $default An optional default value
-     */
-    protected function addOption($name, $default = null)
-    {
-        if (array_key_exists($name, $this->options)) {
-            throw new \InvalidArgumentException(sprintf('The option \'%s\' already exists.', $name));
-        }
-
-        $this->options[$name] = $default;
-    }
-
-    /**
-     * Adds an array of options
-     *
-     * @param  array $options
-     */
-    protected function addOptions(array $options)
-    {
-        foreach ($options as $name => $default) {
-            $this->addOption($name, $default);
-        }
-    }
-
-    /**
      * Merges the given array of options to the instance options and returns
      * the result options array. It does NOT change the instance options.
      *
-     * @param  array $options
+     * @param array $options
      *
      * @return array
+     *
+     * @throws \InvalidArgumentException
      */
     protected function mergeOptions(array $options)
     {
@@ -252,12 +229,14 @@ abstract class AbstractGenerator implements GeneratorInterface
      * @param  string $output  The output filename
      * @param  string $command The generation command
      *
-     * @throws RuntimeException if the output file generation failed
+     * @return string
+     *
+     * @throws \RuntimeException if the output file generation failed
      */
     protected function checkOutput($output, $command)
     {
         // the output file must exist
-        if (!$this->fileExists($output)) {
+        if (!$this->filesystem->exists($output)) {
             throw new \RuntimeException(sprintf(
                 'The file \'%s\' was not created (command: %s).',
                 $output, $command
@@ -265,35 +244,14 @@ abstract class AbstractGenerator implements GeneratorInterface
         }
 
         // the output file must not be empty
-        if (0 === $this->filesize($output)) {
+        if (0 === filesize($output)) {
             throw new \RuntimeException(sprintf(
                 'The file \'%s\' was created but is empty (command: %s).',
                 $output, $command
             ));
         }
-    }
 
-    /**
-     * Checks the process return status
-     *
-     * @param  int   $status    The exit status code
-     * @param  string $stdout   The stdout content
-     * @param  string $stderr   The stderr content
-     * @param  string $command  The run command
-     *
-     * @throws RuntimeException if the output file generation failed
-     */
-    protected function checkProcessStatus($status, $stdout, $stderr, $command)
-    {
-        if (0 !== $status and '' !== $stderr) {
-            throw new \RuntimeException(sprintf(
-                'The exit status code \'%s\' says something went wrong:'."\n"
-                .'stderr: "%s"'."\n"
-                .'stdout: "%s"'."\n"
-                .'command: %s.',
-                $status, $stderr, $stdout, $command
-            ));
-        }
+        return $output;
     }
 
     /**
@@ -313,9 +271,7 @@ abstract class AbstractGenerator implements GeneratorInterface
             $filename .= '.'.$extension;
         }
 
-        if (null !== $content) {
-            file_put_contents($filename, $content);
-        }
+        file_put_contents($filename, (string) $content);
 
         return $filename;
     }
@@ -336,23 +292,14 @@ abstract class AbstractGenerator implements GeneratorInterface
 
         foreach ($options as $key => $option) {
             if (null !== $option && false !== $option) {
-
                 if (true === $option) {
                     $command .= ' --'.$key;
-
                 } elseif (is_array($option)) {
-                    if ($this->isAssociativeArray($option)) {
-                        foreach ($option as $k => $v) {
-                            $command .= ' --'.$key.' '.escapeshellarg($k).' '.escapeshellarg($v);
-                        }
-                    } else {
-                        foreach ($option as $v) {
-                            $command .= " --".$key." ".escapeshellarg($v);
-                        }
+                    foreach ($option as $k => $v) {
+                        $command .= ' --'.$key.(is_string($k) ? ' '.escapeshellarg($k) : '').' '.escapeshellarg($v);
                     }
-
                 } else {
-                    $command .= ' --'.$key." ".escapeshellarg($option);
+                    $command .= ' --'.$key.' '.escapeshellarg($option);
                 }
             }
         }
@@ -363,40 +310,28 @@ abstract class AbstractGenerator implements GeneratorInterface
     }
 
     /**
-     * Return true if the array is an associative array
-     * and not an indexed array
-     *
-     * @param array $array
-     * @return boolean
-     */
-    protected function isAssociativeArray(array $array)
-    {
-        return (bool)count(array_filter(array_keys($array), 'is_string'));
-    }
-
-    /**
      * Executes the given command via shell and returns the complete output as
      * a string
      *
-     * @param  string $command
+     * @param string $command
      *
-     * @return array(status, stdout, stderr)
+     * @throws \RuntimeException
      */
     protected function executeCommand($command)
     {
-        if (class_exists('Symfony\Component\Process\Process')) {
-            $process = new \Symfony\Component\Process\Process($command);
-        } else {
-            $process = new Process($command);
-        }
-
+        $process = new Process($command);
+        $process->setTimeout(600);
         $process->run();
 
-        return array(
-            $process->getExitCode(),
-            $process->getOutput(),
-            $process->getErrorOutput(),
-        );
+        if (!$process->isSuccessful()) {
+            throw new \RuntimeException(sprintf(
+                'The exit status code "%s" says something went wrong:'."\n"
+                    .'stderr: "%s"'."\n"
+                    .'stdout: "%s"'."\n"
+                    .'command: %s.',
+                $process->getExitCode(), $process->getOutput(), $process->getErrorOutput(), $command
+            ));
+        }
     }
 
     /**
@@ -405,117 +340,41 @@ abstract class AbstractGenerator implements GeneratorInterface
      * @param  string  $filename  The output filename
      * @param  boolean $overwrite Whether to overwrite the file if it already
      *                            exist
+     *
+     * @throws \InvalidArgumentException
+     * @throws \RuntimeException
      */
     protected function prepareOutput($filename, $overwrite)
     {
         $directory = dirname($filename);
 
-        if ($this->fileExists($filename)) {
-            if (!$this->isFile($filename)) {
+        if ($this->filesystem->exists($filename)) {
+            $file = new \SplFileInfo($filename);
+            if (!$file->isFile($filename)) {
                 throw new \InvalidArgumentException(sprintf(
-                    'The output file \'%s\' already exists and it is a %s.',
-                    $filename, $this->isDir($filename) ? 'directory' : 'link'
+                    'The output file "%s" already exists and it is a %s.',
+                    $filename, $file->isDir() ? 'directory' : 'link'
                 ));
-            } elseif (false === $overwrite) {
+            }
+
+            if (!$overwrite) {
                 throw new \InvalidArgumentException(sprintf(
-                    'The output file \'%s\' already exists.',
-                    $filename
-                ));
-            } elseif (!$this->unlink($filename)) {
-                throw new \RuntimeException(sprintf(
-                    'Could not delete already existing output file \'%s\'.',
+                    'The output file "%s" already exists.',
                     $filename
                 ));
             }
-        } elseif (!$this->isDir($directory) && !$this->mkdir($directory)) {
+
+            if ($overwrite && !$this->filesystem->unlink($filename)) {
+                throw new \RuntimeException(sprintf(
+                    'Could not delete already existing output file "%s".',
+                    $filename
+                ));
+            }
+        } elseif (!is_dir($filename) && !$this->filesystem->mkdir($directory)) {
             throw new \RuntimeException(sprintf(
-                'The output file\'s directory \'%s\' could not be created.',
+                'The output file\'s directory "%s" could not be created.',
                 $directory
             ));
         }
-    }
-
-    /**
-     * Wrapper for the "file_get_contents" function
-     *
-     * @param  string $filename
-     *
-     * @return string
-     */
-    protected function getFileContents($filename)
-    {
-        return file_get_contents($filename);
-    }
-
-    /**
-     * Wrapper for the "file_exists" function
-     *
-     * @param  string $filename
-     *
-     * @return boolean
-     */
-    protected function fileExists($filename)
-    {
-        return file_exists($filename);
-    }
-
-    /**
-     * Wrapper for the "is_file" method
-     *
-     * @param  string $filename
-     *
-     * @return boolean
-     */
-    protected function isFile($filename)
-    {
-        return is_file($filename);
-    }
-
-    /**
-     * Wrapper for the "filesize" function
-     *
-     * @param  string $filename
-     *
-     * @return integer or FALSE on failure
-     */
-    protected function filesize($filename)
-    {
-        return filesize($filename);
-    }
-
-    /**
-     * Wrapper for the "unlink" function
-     *
-     * @param  string $filename
-     *
-     * @return boolean
-     */
-    protected function unlink($filename)
-    {
-        return unlink($filename);
-    }
-
-    /**
-     * Wrapper for the "is_dir" function
-     *
-     * @param  string $filename
-     *
-     * @return boolean
-     */
-    protected function isDir($filename)
-    {
-        return is_dir($filename);
-    }
-
-    /**
-     * Wrapper for the mkdir function
-     *
-     * @param  string $pathname
-     *
-     * @return boolean
-     */
-    protected function mkdir($pathname)
-    {
-        return mkdir($pathname, 0777, true);
     }
 }

@@ -18,16 +18,14 @@
     ],
 
     "require": {
-        "php": ">=5.3.0"
-    },
-
-    "suggest": {
-        "symfony/process": "Process Component of Symfony2."
+        "php":                ">=5.3.3",
+        "symfony/filesystem": "~2.1",
+        "symfony/process":    "~2.1"
     },
 
     "autoload": {
         "psr-0": {
-            "Knp\\Snappy": "src/"
+            "Knp\\Snappy\\": "src/"
         }
     }
 }

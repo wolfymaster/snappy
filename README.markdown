@@ -8,7 +8,7 @@ You will have to download wkhtmltopdf `0.10.0 >= rc2` in order to use Snappy.
 
 [![Build Status](https://secure.travis-ci.org/KnpLabs/snappy.png?branch=master)](http://travis-ci.org/KnpLabs/snappy)
 
-## Instalation using [Composer](http://getcomposer.org/)
+## Installation using [Composer](http://getcomposer.org/)
 
 Add to your `composer.json`:
 
@@ -25,31 +25,31 @@ Add to your `composer.json`:
 ```php
 <?php
 
-require_once '/path/to/snappy/src/autoload.php';
-
 use Knp\Snappy\Pdf;
 
-$snappy = new Pdf('/usr/local/bin/wkhtmltopdf');
-
-// or you can do it in two steps
 $snappy = new Pdf();
-$snappy->setBinary('/usr/local/bin/wkhtmltopdf');
+
+// By default Snappy uses path to binary: `/usr/local/bin/wkhtmltopdf`
+// but you can change it in two ways
+$snappy = new Pdf('/path/to/bin/wkhtmltopdf');
+// Or
+$snappy = new Pdf();
+$snappy->setBinary('/path/to/bin/wkhtmltopdf');
 
 // Display the resulting image in the browser
 // by setting the Content-type header to jpg
-$snappy = new Pdf('/usr/local/bin/wkhtmltopdf');
+$snappy = new Pdf();
 header('Content-Type: application/pdf');
 header('Content-Disposition: attachment; filename="file.pdf"');
 echo $snappy->getOutput('http://www.github.com');
 
 // .. or simply save the PDF to a file
-$snappy = new Pdf('/usr/local/bin/wkhtmltopdf');
+$snappy = new Pdf();
 $snappy->generateFromHtml('<h1>Bill</h1><p>You owe me money, dude.</p>', '/tmp/bill-123.pdf');
-
 
 // Pass options to snappy
 // Type wkhtmltopdf -H to see the list of options
-$snappy = new Pdf('/usr/local/bin/wkhtmltopdf');
+$snappy = new Pdf();
 $snappy->setOption('disable-javascript', true);
 $snappy->setOption('no-background', true);
 $snappy->setOption('allow', array('/path1', '/path2'));

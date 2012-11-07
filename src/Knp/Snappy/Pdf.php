@@ -5,47 +5,19 @@ namespace Knp\Snappy;
 /**
  * Use this class to transform a html/a url to a pdf
  *
- * @package Snappy
- *
  * @author  Matthieu Bontemps <matthieu.bontemps@knplabs.com>
  * @author  Antoine Hérault <antoine.herault@knplabs.com>
  */
 class Pdf extends AbstractGenerator
 {
-
-    protected $hasHtmlHeader = false;
-    protected $hasHtmlFooter = false;
-
     /**
      * {@inheritDoc}
      */
     public function __construct($binary = null, array $options = array())
     {
-        $this->setDefaultExtension('pdf');
-
         parent::__construct($binary, $options);
-    }
 
-    /**
-     * handle options to transform HTML header-html or footer-html into files contains HTML
-     * @param array $options
-     * @return array $options Tranformed options
-     */
-    protected function handleOptions(array $options = array())
-    {
-        $headerHtml = isset($options['header-html']) ? $options['header-html'] : null;
-        if (null !== $headerHtml && !filter_var($headerHtml, FILTER_VALIDATE_URL) && !$this->isFile($headerHtml)) {
-            $options['header-html'] = $this->createTemporaryFile($headerHtml, 'html');
-            $this->hasHtmlHeader = true;
-        }
-
-        $footerHtml = isset($options['footer-html']) ? $options['footer-html'] : null;
-        if (null !== $footerHtml && !filter_var($footerHtml, FILTER_VALIDATE_URL) && !$this->isFile($footerHtml)) {
-            $options['footer-html'] = $this->createTemporaryFile($footerHtml, 'html');
-            $this->hasHtmlFooter = true;
-        }
-
-        return $options;
+        $this->defaultExtension = 'pdf';
     }
 
     /**
@@ -53,17 +25,23 @@ class Pdf extends AbstractGenerator
      */
     public function generate($input, $output, array $options = array(), $overwrite = false)
     {
-        $options = $this->handleOptions($options);
+        if (null !== $options['header-html'] && !parse_url($options['header-html'], PHP_URL_HOST) && !$this->filesystem->exists($options['header-html'])) {
+            $options['header-html'] = $this->createTemporaryFile($options['header-html'], 'html');
+        }
+
+        if (null !== $options['footer-html'] && !parse_url($options['footer-html'], PHP_URL_HOST) && !$this->filesystem->exists($options['footer-html'])) {
+            $options['footer-html'] = $this->createTemporaryFile($options['footer-html'], 'html');
+        }
 
         parent::generate($input, $output, $options, $overwrite);
 
         // to delete header or footer generated files
-        if ($this->hasHtmlHeader) {
-            $this->unlink($options['header-html']);
+        if ($options['header-html']) {
+            $this->filesystem->unlink($options['header-html']);
         }
 
-        if ($this->hasHtmlFooter) {
-            $this->unlink($options['footer-html']);
+        if ($options['footer-html']) {
+            $this->filesystem->unlink($options['footer-html']);
         }
     }
 
@@ -72,7 +50,7 @@ class Pdf extends AbstractGenerator
      */
     protected function configure()
     {
-        $this->addOptions(array(
+        $this->options = array(
             'ignore-load-errors'           => null, // old v0.9
             'lowquality'                   => true,
             'collate'                      => null,
@@ -191,6 +169,6 @@ class Pdf extends AbstractGenerator
             'disable-toc-links'            => null,
             'toc-text-size-shrink'         => null,
             'xsl-style-sheet'              => null,
-        ));
+        );
     }
 }
