@@ -15,6 +15,7 @@ class Pdf extends AbstractGenerator
 
     protected $hasHtmlHeader = false;
     protected $hasHtmlFooter = false;
+	protected $thisdoesntmatter = true;
 
     /**
      * {@inheritDoc}
