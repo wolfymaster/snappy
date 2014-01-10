@@ -57,13 +57,12 @@ $snappy->setOption('cookie', array('key' => 'value', 'key2' => 'value2'));
 
 ## wkhtmltopdf binary as composer dependencies
 
-If you want to download wkhtmltopdf and wkhtmltoimage with composer you add to `composer.json`:
+If you want to download wkhtmltopdf with composer you add to `composer.json`:
 
 ```json
 {
     "require": {
-        "h4cc/wkhtmltopdf-i386": "0.11.0-RC1",
-        "h4cc/wkhtmltoimage-i386": "0.11.0-RC1"
+        "google/wkhtmltopdf-i386": "0.11.0-RC1"
     }
 }
 ```
@@ -73,9 +72,39 @@ or this if you are in 64 bit based system:
 ```json
 {
     "require": {
-        "h4cc/wkhtmltopdf-amd64": "0.11.0-RC1",
-        "h4cc/wkhtmltoimage-amd64": "0.11.0-RC1"
+        "google/wkhtmltopdf-amd64": "0.11.0-RC1"
     }
+}
+```
+
+> __NOTE__: to be able to use those custom defined packages you need to copy into your `composer.json` following code:
+
+```json
+{
+    "repositories": [
+        {
+            "type": "package",
+            "package": {
+                "name": "google/wkhtmltopdf-amd64",
+                "version": "0.11.0-RC1",
+                "dist": {
+                    "url": "http://wkhtmltopdf.googlecode.com/files/wkhtmltopdf-0.11.0_rc1-static-amd64.tar.bz2",
+                    "type": "tar"
+                }
+            }
+        },
+        {
+            "type": "package",
+            "package": {
+                "name": "google/wkhtmltopdf-i386",
+                "version": "0.11.0-RC1",
+                "dist": {
+                    "url": "http://wkhtmltopdf.googlecode.com/files/wkhtmltopdf-0.11.0_rc1-static-i386.tar.bz2",
+                    "type": "tar"
+                }
+            }
+        }
+    ]
 }
 ```
 
@@ -88,11 +117,11 @@ use Knp\Snappy\Pdf;
 
 $myProjetDirectory = '/path/to/my/project';
 
-$snappy = new Pdf($myProjetDirectory . '/vendor/h4cc/wkhtmltopdf-i386/bin/wkhtmltopdf-i386');
+$snappy = new Pdf($myProjetDirectory . '/vendor/google/wkhtmltopdf-i386/wkhtmltopdf-i386');
 
 // or
 
-$snappy = new Pdf($myProjetDirectory . '/vendor/h4cc/wkhtmltopdf-amd64/bin/wkhtmltopdf-amd64');
+$snappy = new Pdf($myProjetDirectory . '/vendor/google/wkhtmltopdf-amd64/wkhtmltopdf-amd64');
 ```
 
 
